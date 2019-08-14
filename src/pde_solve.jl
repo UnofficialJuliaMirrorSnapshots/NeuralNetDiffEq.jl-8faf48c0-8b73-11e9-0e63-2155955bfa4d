@@ -1,26 +1,3 @@
-struct TerminalPDEProblem{G,F,Mu,Sigma,X,T,P} <: DiffEqBase.DEProblem
-    g::G
-    f::F
-    μ::Mu
-    σ::Sigma
-    X0::X
-    tspan::Tuple{T,T}
-    p::P
-    TerminalPDEProblem(g,f,μ,σ,X0,tspan,p=nothing) = new{typeof(g),typeof(f),
-                                                         typeof(μ),typeof(σ),
-                                                         typeof(X0),eltype(tspan),
-                                                         typeof(p)}(
-                                                         g,f,μ,σ,X0,tspan,p)
-end
-
-Base.summary(prob::TerminalPDEProblem) = string(nameof(typeof(prob)))
-
-function Base.show(io::IO, A::TerminalPDEProblem)
-  println(io,summary(A))
-  print(io,"timespan: ")
-  show(io,A.tspan)
-end
-
 struct NNPDEHan{C1,C2,O} <: NeuralNetDiffEqAlgorithm
     u0::C1
     σᵀ∇u::C2
@@ -31,12 +8,10 @@ NNPDEHan(u0,σᵀ∇u;opt=Flux.ADAM(0.1)) = NNPDEHan(u0,σᵀ∇u,opt)
 function DiffEqBase.solve(
     prob::TerminalPDEProblem,
     alg::NNPDEHan;
-    timeseries_errors = true,
-    save_everystep=true,
-    adaptive=false,
     abstol = 1f-6,
     verbose = false,
     maxiters = 300,
+    save_steps = false,
     dt,
     trajectories)
 
@@ -73,8 +48,10 @@ function DiffEqBase.solve(
         mean(sum(abs2,g(X) - u) for (X,u) in sol())
     end
 
+    iters = eltype(X0)[]
 
     cb = function ()
+        save_steps && push!(iters, u0(X0)[1].data)
         l = loss()
         verbose && println("Current loss is: $l")
         l < abstol && Flux.stop()
@@ -82,5 +59,5 @@ function DiffEqBase.solve(
 
     Flux.train!(loss, ps, data, opt; cb = cb)
 
-    u0(X0)[1].data
+    save_steps ? iters : u0(X0)[1].data
 end #pde_solve
